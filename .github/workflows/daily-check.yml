@@ -24,7 +24,7 @@ jobs:
         run: python check_availability.py
 
       - name: Persist availability for next run
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: previous_availability
           path: previous_availability.json
