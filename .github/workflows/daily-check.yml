@@ -1,4 +1,3 @@
-```yaml
 name: Daily Komuna Coffee Availability Check
 
 on:
@@ -30,4 +29,3 @@ jobs:
       - name: Push changes
         if: success()
         run: echo "Push handled in script"
-```
