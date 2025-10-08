@@ -12,14 +12,20 @@ def get_product_availability():
     soup = BeautifulSoup(response.text, "html.parser")
 
     products = {}
-    for product_card in soup.select("div.product-card, div.card__information"):
+    for product_card in soup.select("div.product-card, div.card__content"):
+        # Grab product name
         name_tag = product_card.find(["h3", "a"], class_=lambda c: c and "card__heading" in c or c == "product-card__title")
         if not name_tag:
             continue
         name = name_tag.get_text(strip=True)
 
-        badge = product_card.select_one("div.card__badge.bottom.left span.badge.badge--bottom-left.color-scheme-3")
-        availability = "Sold out" if badge and "Sold out" in badge.get_text() else "Available"
+        # Check if any <span> inside .card__badge.bottom.left contains "Sold out"
+        sold_out_badge = product_card.select_one("div.card__badge.bottom.left span")
+        if sold_out_badge and "Sold out" in sold_out_badge.get_text(strip=True):
+            availability = "Sold out"
+        else:
+            availability = "Available"
+
         products[name] = availability
     return products
 
