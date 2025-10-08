@@ -59,14 +59,6 @@ def send_slack_message(message):
     requests.post(webhook, json=payload)
 
 
-def git_commit_and_push():
-    subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
-    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
-    subprocess.run(["git", "add", "availability.json"], check=True)
-    subprocess.run(["git", "commit", "-m", "Update availability data"], check=True)
-    subprocess.run(["git", "push"], check=True)
-
-
 if __name__ == "__main__":
     print("Fetching current product data...")
     current = get_current_availability()
@@ -83,4 +75,3 @@ if __name__ == "__main__":
     message = "*Komuna Coffee Stock Update:*\n" + "\n".join(changes)
     send_slack_message(message)
 
-    git_commit_and_push()
