@@ -1,16 +1,17 @@
 import requests
 from bs4 import BeautifulSoup
-import json
 import os
-import subprocess
+import json
 
-def get_current_availability():
+ARTIFACT_FILE = "previous_availability.json"
+
+def get_product_availability():
     url = "https://komunacoffee.com/collections/coffee-beans"
     response = requests.get(url)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
 
-    products = []
+    products = {}
     for product_card in soup.select("div.product-card, div.card__information"):
         name_tag = product_card.find(["h3", "a"], class_=lambda c: c and "card__heading" in c or c == "product-card__title")
         if not name_tag:
@@ -18,60 +19,61 @@ def get_current_availability():
         name = name_tag.get_text(strip=True)
 
         badge = product_card.select_one("div.card__badge.bottom.left span.badge.badge--bottom-left.color-scheme-3")
-        if badge and "Sold out" in badge.get_text():
-            products.append({"product_name": name, "availability": "Sold out"})
-        else:
-            products.append({"product_name": name, "availability": "Available"})
+        availability = "Sold out" if badge and "Sold out" in badge.get_text() else "Available"
+        products[name] = availability
     return products
 
-
 def load_previous():
-    if not os.path.exists("availability.json"):
-        return []
-    with open("availability.json", "r") as f:
-        return json.load(f)
-
+    if os.path.exists(ARTIFACT_FILE):
+        with open(ARTIFACT_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
 def save_current(data):
-    with open("availability.json", "w") as f:
+    with open(ARTIFACT_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
+def format_slack_message(current, previous):
+    available = [f"☕ *{p}*" for p, status in current.items() if status == "Available"]
+    sold_out = [f"❌ *{p}*" for p, status in current.items() if status == "Sold out"]
 
-def summarize_changes(old, new):
+    # Detect changes
     changes = []
-    old_map = {p["product_name"]: p["availability"] for p in old}
-    for item in new:
-        old_status = old_map.get(item["product_name"])
-        if old_status and old_status != item["availability"]:
-            changes.append(f"{item['product_name']}: {old_status} → {item['availability']}")
-        elif old_status is None:
-            changes.append(f"{item['product_name']}: added ({item['availability']})")
-    return changes
+    for p, status in current.items():
+        if p in previous and previous[p] != status:
+            changes.append(f"{p}: {previous[p]} → {status}")
+        elif p not in previous:
+            changes.append(f"{p}: added ({status})")
 
+    # Build message
+    msg_lines = ["*Komuna Coffee Daily Availability:*"]
+    if available:
+        msg_lines.append("\n*Available:*")
+        msg_lines.extend(available)
+    if sold_out:
+        msg_lines.append("\n*Sold Out:*")
+        msg_lines.extend(sold_out)
+    
+    if changes:
+        # Tag everyone if there are changes
+        msg_lines.insert(0, "<!channel> ⚡ *Changes detected!*")
+        msg_lines.insert(1, "*Change summary:*")
+        for change in changes:
+            msg_lines.insert(2, f"• {change}")  # Insert before detailed lists
 
-def send_slack_message(message):
-    import requests
+    return "\n".join(msg_lines)
+
+def send_to_slack(message):
     webhook = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook:
         print("No Slack webhook configured.")
         return
-    payload = {"text": message}
-    requests.post(webhook, json=payload)
-
+    requests.post(webhook, json={"text": message})
 
 if __name__ == "__main__":
-    print("Fetching current product data...")
-    current = get_current_availability()
+    current = get_product_availability()
     previous = load_previous()
-    changes = summarize_changes(previous, current)
-
-    if not changes:
-        print("No changes detected.")
-        exit(0)
-
-    print("Changes detected:\n" + "\n".join(changes))
+    message = format_slack_message(current, previous)
+    send_to_slack(message)
     save_current(current)
-
-    message = "*Komuna Coffee Stock Update:*\n" + "\n".join(changes)
-    send_slack_message(message)
-
+    print(message)
