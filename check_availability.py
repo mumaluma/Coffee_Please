@@ -1,4 +1,3 @@
-```python
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -85,4 +84,3 @@ if __name__ == "__main__":
     send_slack_message(message)
 
     git_commit_and_push()
-```
